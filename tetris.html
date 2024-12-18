@@ -9,23 +9,25 @@
   </head>
   <body>
     <div id="game-container">
-      
-      <div id="saved-shape-container">
-        <h3>хадгалсан дүрс:</h3>
-        <div id="saved-shape"></div>
-      </div>
       <div id="game-board"></div>
       <div id="next-shape-container">
         <h3>Дараагийн хэлбэр:</h3>
         <div id="next-shape"></div>
+      </div>
+      <div id="hold-container">
+        <h3>Hold:</h3>
+        <div id="hold-shape"></div>
       </div>
     </div>
     <div id="score-container">
       <h3>Оноо: <span id="score">0</span></h3>
     </div>
     <div>
-      <button onclick="startGame()">Start Game</button>
+      <button onclick="setSpeed(speed)">Start Game</button>
+      <a href="https://enkhjin9127.github.io/Tetris-project/"
+        ><button>Restart</button></a
+      >
     </div>
     <script src="./tetris.js"></script>
   </body>
-</html> 
+</html>

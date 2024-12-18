@@ -1,19 +1,19 @@
 const gameBoard = document.getElementById("game-board");
 const nextShapeContainer = document.getElementById("next-shape");
-const savedShapeContainer = document.getElementById("saved-shape");
 
 // Тоглоомын тохиргоо
 const rows = 20;
 const cols = 10;
 const board = [];
 const nextBoard = [];
-const saveBoard = [];
 let score = 0;
 let speed = 400; // Анхны хурд
 let gameInterval; // Тоглоомын интервал
 let level = 1; // Анхны түвшин
-const levelUpScore = 600; // Түвшин ахих онооны босго
-let savedShape = null; // Хадгалсан блокыг хадгалах хувьсагч
+const levelUpScore = 700; // Түвшин ахих онооны босго
+let holdShape = null; // The held piece
+let canHold = true; // Allow hold once per piece
+const holdContainer = document.getElementById("hold-shape");
 
 // Блокын хэлбэрүүд
 const shapes = [
@@ -52,6 +52,14 @@ function updateLevel() {
   }
 }
 
+const gameOverSound = new Audio("sounds/videoplayback.mp4");
+
+// Helper function to play sounds
+function playSound(sound) {
+  sound.currentTime = 0; // Reset sound to start
+  sound.play();
+}
+
 // Санамсаргүй өнгө үүсгэх функц
 function getRandomColor() {
   const colors = [
@@ -61,13 +69,13 @@ function getRandomColor() {
     "#2ecc71",
     "#9b59b6",
     "#e67e22",
-    
   ];
   return colors[Math.floor(Math.random() * colors.length)];
 }
-// 7 bag FileSystem
+
 let bag = [];
 
+// Function to shuffle an array (Fisher-Yates shuffle)
 function shuffle(array) {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -75,29 +83,34 @@ function shuffle(array) {
   }
 }
 
+// Function to refill the bag with all 7 shapes in random order
 function refillBag() {
-  bag = [...shapes];
-  shuffle(bag);
+  bag = [...shapes]; // Copy all shapes into the bag
+  shuffle(bag); // Shuffle the bag
 }
 
+// Function to get the next shape from the 7-bag
 function getRandomShape() {
   if (bag.length === 0) {
-    refillBag();
+    refillBag(); // If the bag is empty, refill it
   }
-  const shape = bag.pop();
-  const color = getRandomColor();
+  const shape = bag.pop(); // Get the last shape from the bag
+  const color = getRandomColor(); // Assign a random color
   return { shape, color, x: Math.floor(cols / 2 - shape[0].length / 2), y: 0 };
 }
 
+// Initialize the first bag
 refillBag();
-let lockTimer = null;
-const LOCK_DELAY = 500;
+let lockTimer = null; // Timer for locking delay
+const LOCK_DELAY = 500; // Delay in milliseconds
+
+
 
 function moveShape(direction) {
   if (direction === "down") {
     currentShape.y++;
     if (!isValidPosition()) {
-      currentShape.y--;
+      currentShape.y--; // Revert the move
 
       // Start the lock delay timer
       if (!lockTimer) {
@@ -129,7 +142,7 @@ function moveShape(direction) {
 
 // Одоогийн болон дараагийн блокуудыг үүсгэх
 let currentShape = getRandomShape();
-  let nextShape = getRandomShape();
+let nextShape = getRandomShape();
 
 // Талбай үүсгэх
 for (let r = 0; r < rows; r++) {
@@ -149,30 +162,28 @@ for (let r = 0; r < 4; r++) {
   for (let c = 0; c < 4; c++) {
     const cell = document.createElement("div");
     cell.classList.add("cell");
+    holdContainer.appendChild(cell);
+    row.push(cell);
+  }
+  nextBoard.push(row);
+}
+for (let r = 0; r < 4; r++) {
+  const row = [];
+  for (let c = 0; c < 4; c++) {
+    const cell = document.createElement("div");
+    cell.classList.add("cell");
     nextShapeContainer.appendChild(cell);
     row.push(cell);
   }
   nextBoard.push(row);
 }
 
-  for (let r = 0; r < 4; r++) {
-    const row = [];
-    for (let c = 0; c < 4; c++) {
-      const cell = document.createElement("div");
-      cell.classList.add("cell");
-      savedShapeContainer.appendChild(cell);
-      row.push(cell);
-    }
-    saveBoard.push(row);
-  }
-
-
 // Сүүдэр зурах функц
 function drawShadow() {
   clearShadow();
   let tempY = currentShape.y;
 
-  while ( 
+  while (
     isValidPosition({
       x: currentShape.x,
       y: tempY + 1,
@@ -223,6 +234,83 @@ function drawShape() {
   });
 }
 
+function drawHoldShape() {
+  // Clear the hold container
+  holdContainer.innerHTML = "";
+
+  // Set the hold container to a fixed 4x4 grid
+  // holdContainer.style.display = "grid";
+  // holdContainer.style.gridTemplateRows = "repeat(4, 30px)";
+  // holdContainer.style.gridTemplateColumns = "repeat(4, 30px)";
+
+  if (!holdShape) return; // Nothing to draw if holdShape is null
+
+  const shape = holdShape.shape;
+
+  // Center the shape within the 4x4 grid
+  const offsetX = Math.floor((4 - shape[0].length) / 2);
+  const offsetY = Math.floor((4 - shape.length) / 2);
+
+  for (let r = 0; r < 4; r++) {
+    for (let c = 0; c < 4; c++) {
+      const cell = document.createElement("div");
+      cell.classList.add("hold-cell");
+
+      // Check if the current grid position matches a block in the shape
+      if (
+        r >= offsetY &&
+        r < offsetY + shape.length &&
+        c >= offsetX &&
+        c < offsetX + shape[0].length &&
+        shape[r - offsetY][c - offsetX]
+      ) {
+        cell.classList.add("active");
+        cell.style.setProperty("--color", holdShape.color);
+      }
+
+      holdContainer.appendChild(cell);
+    }
+  }
+}
+
+function holdCurrentShape() {
+  if (!canHold) return; // Prevent multiple swaps per drop
+
+  if (!holdShape) {
+    // First time holding a piece
+    holdShape = currentShape;
+    currentShape = getNextShape();  
+  } else {
+    // Swap current piece with held piece
+    [holdShape, currentShape] = [currentShape, holdShape];
+    currentShape.x = Math.floor(cols / 2 - currentShape.shape[0].length / 2);
+    currentShape.y = 0;
+  }
+
+  canHold = false; // Disable hold until next piece is locked
+  drawHoldShape(); // Update the hold container
+  drawShape(); // Redraw the current piece
+}
+
+function holdCurrentShape() {
+  if (!canHold) return; // Prevent multiple swaps per drop
+
+  if (!holdShape) {
+    // First time holding a piece
+    holdShape = currentShape;
+    currentShape = getNextShape();
+  } else {
+    // Swap current piece with held piece
+    [holdShape, currentShape] = [currentShape, holdShape];
+    currentShape.x = Math.floor(cols / 2 - currentShape.shape[0].length / 2);
+    currentShape.y = 0;
+  }
+
+  canHold = false; // Disable hold until next piece is locked
+  drawHoldShape(); // Update the hold container
+  drawShape(); // Redraw the current piece
+}
+
 // Талбайг цэвэрлэх
 function clearBoard() {
   board.forEach((row) =>
@@ -258,6 +346,8 @@ function lockShape() {
       }
     });
   });
+
+  canHold = true; // Allow hold again
 }
 
 // Хязгаар шалгах
@@ -279,49 +369,6 @@ function isValidPosition({
       );
     });
   });
-}
-// Одоогийн блокыг хадгалах функц
-function saveShape() {
-  savedShape = {
-    shape: currentShape.shape.map((row) => [...row]), // Хэлбэрийг хуулбарлана
-    color: currentShape.color, // Өнгө хадгална
-    x: currentShape.x, // Байрлалын x
-    y: currentShape.y, // Байрлалын y
-  };
-  clearShape(); // Талбайгаас блокыг арилгана
-}
-
-// Блокыг талбайгаас арилгах функц
-function clearShape() {
-  currentShape.shape.forEach((row, rIdx) => {
-    row.forEach((value, cIdx) => {
-      if (value) {
-        const x = currentShape.x + cIdx;
-        const y = currentShape.y + rIdx;
-        if (y >= 0 && board[y] && board[y][x]) {
-          const cell = board[y][x];
-          cell.classList.remove("active");
-          cell.style.setProperty("--color", "");
-        }
-      }
-    });
-  });
-  currentShape = getNextShape(); // Шинэ блок үүсгэнэ
-  drawShape(); // Талбайг шинэчлэн зурна
-}
-
-// Хадгалсан блокыг буцааж гаргаж ирэх функц
-function restoreShape() {
-  if (savedShape) {
-    currentShape = {
-      shape: savedShape.shape.map((row) => [...row]), // Хэлбэрийг сэргээнэ
-      color: savedShape.color, // Өнгийг сэргээнэ
-      x: Math.floor(cols / 2 - savedShape.shape[0].length / 2), // Төвд байрлуулна
-      y: 0, // Дээд талд байрлуулна
-    };
-    drawShape(); // Блокыг дахин зурна
-    savedShape = null; // Хадгалсан блокыг устгана
-  }
 }
 
 // Мөрийг устгах
@@ -362,6 +409,7 @@ function setSpeed(newSpeed) {
 // Тоглоом дуусахыг шалгах
 function checkGameOver() {
   if (board[0].some((cell) => cell.classList.contains("fixed"))) {
+    playSound(gameOverSound);
     alert("Тоглоом дууслаа!");
     location.reload();
   }
@@ -408,12 +456,11 @@ function rotateShape() {
 
 // Товчлуураар удирдах
 document.addEventListener("keydown", (event) => {
-  if (event.key === "a") saveShape(); // "S" дарж блокыг хадгална
-  else if (event.key === "s") restoreShape(); // "R" дарж блокыг сэргээнэ
-  else if (event.key === "ArrowLeft") moveShape("left");
+  if (event.key === "ArrowLeft") moveShape("left");
   else if (event.key === "ArrowRight") moveShape("right");
   else if (event.key === "ArrowDown") moveShape("down");
   else if (event.key === "ArrowUp") rotateShape();
+  else if (event.key === "Shift") holdCurrentShape();
   else if (event.key === " ") {
     while (isValidPosition({ x: currentShape.x, y: currentShape.y + 1 })) {
       currentShape.y++;
