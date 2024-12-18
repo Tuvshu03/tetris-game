@@ -200,7 +200,7 @@ function drawShadow() {
         const y = tempY + rIdx;
         if (y >= 0 && board[y] && board[y][x]) {
           board[y][x].classList.add("shadow");
-        }
+        } 
       }
     });
   });
